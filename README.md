@@ -74,6 +74,20 @@ docker compose up -d
 
 For a fixed deployment, replace `ghcr.io/OWNER/REPO:latest` with your real GHCR image name in `docker-compose.ghcr.yml`.
 
+### Building a hardware-enabled image
+
+If you need the image to include Intel VA / QSV drivers, build and push the image from a machine that has access to the appropriate package repositories and drivers (for example, your target OMV host or a self-hosted runner that matches your distro). Example local build and push:
+
+```bash
+# build with hardware drivers enabled
+docker build --build-arg USE_HW=true -t ghcr.io/OWNER/REPO:hw -f Dockerfile .
+# log in and push
+docker login ghcr.io
+docker push ghcr.io/OWNER/REPO:hw
+```
+
+You can then reference `ghcr.io/OWNER/REPO:hw` in your `docker-compose.yml` for hosts with compatible hardware and drivers.
+
 ## Notes
 
 The application uses SQLite persistence in `/data/transcode.db`. Queue state and file scan results survive restarts.

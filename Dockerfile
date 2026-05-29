@@ -1,19 +1,18 @@
 FROM python:3.12-slim
-
+ARG USE_HW=false
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
+# Install common packages; install Intel VA packages only when explicitly requested
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     mediainfo \
     mkvtoolnix \
-    libva2 \
-    vainfo \
-    intel-media-va-driver-nonfree \
     curl \
     ca-certificates \
     build-essential \
+    && if [ "$USE_HW" = "true" ]; then apt-get install -y --no-install-recommends libva2 vainfo intel-media-va-driver-nonfree || true; fi \
     && rm -rf /var/lib/apt/lists/*
 
 RUN apt-get update && apt-get install -y --no-install-recommends plexmediaserver || true
