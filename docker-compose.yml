@@ -1,0 +1,20 @@
+services:
+  transcoding-manager:
+    build: .
+    container_name: hdr-transcode-manager
+    ports:
+      - "8080:8080"
+    environment:
+      - DATABASE_URL=sqlite:////data/transcode.db
+      - PLEX_TRANSCODER_PATH=${PLEX_TRANSCODER_PATH:-}
+      - MAX_CONCURRENT_TRANSCODES=${MAX_CONCURRENT_TRANSCODES:-2}
+      - SOFTWARE_FALLBACK=${SOFTWARE_FALLBACK:-false}
+      - OUTPUT_BITRATE=${OUTPUT_BITRATE:-4500}
+      - OUTPUT_RESOLUTION=${OUTPUT_RESOLUTION:-1920x1080}
+      - SCAN_INTERVAL=${SCAN_INTERVAL:-60}
+      - LOG_RETENTION_DAYS=${LOG_RETENTION_DAYS:-30}
+    volumes:
+      - ./data:/data
+    devices:
+      - /dev/dri:/dev/dri
+    restart: unless-stopped
