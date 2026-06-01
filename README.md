@@ -14,12 +14,29 @@ A Dockerized FastAPI + React service for detecting HDR media, queueing FHD SDR t
 
 ## Docker
 
+### Quick start (local development)
+
 ```bash
 cp .env.example .env
 docker compose up --build
 ```
 
 The application listens on port `8080`.
+
+### OMV8 deployment with Intel QSV
+
+For OpenMediaVault 8 deployments with hardware acceleration, see [DEPLOY.md](DEPLOY.md) and use `docker-compose.omv.yml`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/sappig/HDR-to-SDR/main/docker-compose.omv.yml -o docker-compose.yml
+docker compose up -d
+```
+
+This includes:
+- Intel QSV hardware acceleration via `/dev/dri`
+- OMV-friendly volume mappings
+- Example environment variables
+- Plex transcoder integration (optional)
 
 ## Folder volume guidance
 

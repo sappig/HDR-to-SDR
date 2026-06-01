@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  hdr-transcode-manager:
+    # Hardware-enabled image from GHCR. Build locally with USE_HW=true if needed.
+    image: ghcr.io/sappig/HDR-to-SDR:hw
+    container_name: hdr-transcode-manager
+    restart: unless-stopped
+    
+    # Port mapping
+    ports:
+      - "8080:8080"
+    
+    # OMV-specific paths: adjust to match your media and data locations
+    volumes:
+      # Data directory for SQLite database and logs
+      - /srv/transcode/data:/data
+      
+      # Media input directories (add more as needed)
+      - /mnt/movies:/media/movies
+      - /mnt/tv:/media/tv
+      
+      # Optional: Plex transcoder binaries
+      # Download and extract these on the host, then mount here.
+      # See DEPLOY.md for setup instructions.
+      - /srv/plex-transcoder:/opt/plex-transcoder:ro
+    
+    # Intel QSV hardware acceleration
+    devices:
+      - /dev/dri:/dev/dri
+    
+    # Environment variables with example values
+    environment:
+      # Application settings
+      - DATABASE_URL=sqlite:////data/transcode.db
+      - SCAN_INTERVAL=60                    # Folder scan interval in seconds
+      - LOG_RETENTION_DAYS=30               # Keep logs for 30 days
+      
+      # Transcoding quality settings
+      - OUTPUT_BITRATE=4500                 # Output bitrate in kbps (4500 for good quality)
+      - OUTPUT_RESOLUTION=1920x1080         # FHD resolution
+      - MAX_CONCURRENT_TRANSCODES=2         # Number of concurrent transcode jobs
+      - SOFTWARE_FALLBACK=false             # Allow software fallback if QSV unavailable
+      
+      # Plex transcoder path (if using Plex binary)
+      # Leave empty to use system ffmpeg, or set to Plex transcoder path
+      - PLEX_TRANSCODER_PATH=/opt/plex-transcoder/PlexTranscoder
+      
+      # Timezone
+      - TZ=UTC
