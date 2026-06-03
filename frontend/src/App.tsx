@@ -24,6 +24,7 @@ interface Folder { id: number; path: string; enabled: boolean; created_at: strin
 interface FileRecord { id: number; path: string; hdr_detected: boolean; hdr_type: string | null; status: string; resolution: string | null; codec: string | null; bitrate: number | null; audio_tracks: number | null; subtitle_tracks: number | null; file_size: number; scanned_at: string }
 interface QueueItem { id: number; media_file_id: number; state: string; progress: number; paused: boolean; sort_order: number; started_at?: string | null; completed_at?: string | null }
 interface Settings { max_concurrent_transcodes: number; software_fallback: boolean; output_bitrate: number; output_resolution: string; plex_transcoder_path: string | null; scan_interval: number; log_retention_days: number; qsv_available: boolean; qsv_device: string | null; detected_plex_version: string | null }
+interface DirectoryEntry { name: string; path: string; is_dir: boolean; parent?: string | null }
 
 const baseUrl = ''
 
@@ -33,6 +34,10 @@ function App() {
   const [queue, setQueue] = useState<QueueItem[]>([])
   const [settings, setSettings] = useState<Settings | null>(null)
   const [folderPath, setFolderPath] = useState('')
+  const [browseEntries, setBrowseEntries] = useState<DirectoryEntry[]>([])
+  const [browsePath, setBrowsePath] = useState<string | null>(null)
+  const [browseError, setBrowseError] = useState('')
+  const [isBrowsing, setIsBrowsing] = useState(false)
   const [tab, setTab] = useState(0)
   const [message, setMessage] = useState('')
   const [settingsForm, setSettingsForm] = useState<Settings | null>(null)
@@ -52,6 +57,24 @@ function App() {
     setSettingsForm(settingsData)
   }
 
+  const loadBrowse = async (path?: string) => {
+    try {
+      const url = path ? `${baseUrl}/folders/browse?path=${encodeURIComponent(path)}` : `${baseUrl}/folders/browse`
+      const res = await fetch(url)
+      if (!res.ok) {
+        throw new Error(await res.text())
+      }
+      setBrowseEntries(await res.json())
+      setBrowsePath(path || null)
+      setBrowseError('')
+      setIsBrowsing(true)
+    } catch (err) {
+      setBrowseError(typeof err === 'string' ? err : (err as Error).message)
+      setBrowseEntries([])
+      setIsBrowsing(true)
+    }
+  }
+
   useEffect(() => {
     loadAll()
     const interval = setInterval(loadAll, 5000)
@@ -69,6 +92,25 @@ function App() {
       setFolderPath('')
       await loadAll()
     }
+  }
+
+  const selectBrowseEntry = (entry: DirectoryEntry) => {
+    if (entry.is_dir) {
+      loadBrowse(entry.path)
+    }
+  }
+
+  const chooseCurrentBrowsePath = () => {
+    if (browsePath) {
+      setFolderPath(browsePath)
+      setIsBrowsing(false)
+    }
+  }
+
+  const closeBrowse = () => {
+    setIsBrowsing(false)
+    setBrowseEntries([])
+    setBrowseError('')
   }
 
   const removeFolder = async (id: number) => {
@@ -190,7 +232,30 @@ function App() {
         <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2 }}>
           <TextField fullWidth label="Folder path" value={folderPath} onChange={(e) => setFolderPath(e.target.value)} />
           <Button variant="contained" onClick={addFolder}>Add Folder</Button>
+          <Button variant="outlined" onClick={() => loadBrowse()}>Browse</Button>
         </Stack>
+        {isBrowsing && (
+          <Paper sx={{ p: 2, mb: 2, backgroundColor: '#f7f7f7' }}>
+            <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 1 }}>
+              <Typography variant="subtitle1">Browse folders</Typography>
+              <Button size="small" onClick={chooseCurrentBrowsePath} disabled={!browsePath}>Select current folder</Button>
+              <Button size="small" onClick={closeBrowse}>Close</Button>
+            </Stack>
+            {browseError ? (
+              <Alert severity="error">{browseError}</Alert>
+            ) : (
+              <List dense>
+                {browseEntries.length === 0 ? (
+                  <ListItem><ListItemText primary="No directories found." /></ListItem>
+                ) : browseEntries.map((entry) => (
+                  <ListItem key={entry.path} component="button" onClick={() => selectBrowseEntry(entry)}>
+                    <ListItemText primary={entry.name} secondary={entry.path} />
+                  </ListItem>
+                ))}
+              </List>
+            )}
+          </Paper>
+        )}
         <Typography variant="body2" color="text.secondary" gutterBottom>
           The UI shows the required volume mappings below. After adding a folder, restart the container with the updated mapping.
         </Typography>

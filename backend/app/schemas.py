@@ -14,6 +14,13 @@ class FolderRead(FolderCreate):
     created_at: datetime
 
 
+class DirectoryEntry(BaseModel):
+    name: str
+    path: str
+    is_dir: bool
+    parent: Optional[str] = None
+
+
 class MediaFileRead(BaseModel):
     id: int
     folder_id: int

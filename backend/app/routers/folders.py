@@ -1,11 +1,23 @@
+import os
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Query
 from sqlalchemy.orm import Session
 
 from ..database import SessionLocal
 from ..models import Folder
-from ..schemas import FolderCreate, FolderRead
+from ..schemas import DirectoryEntry, FolderCreate, FolderRead
+
+
+BROWSE_ROOTS = [root.strip() for root in os.getenv("BROWSE_ROOTS", "/mnt/movies,/mnt/tv,/media").split(",") if root.strip()]
+ALLOWED_ROOTS = [os.path.realpath(root) for root in BROWSE_ROOTS]
+
+
+def resolve_and_validate_path(path: str) -> str:
+    real_path = os.path.realpath(path)
+    if not any(os.path.commonpath([real_path, root]) == root for root in ALLOWED_ROOTS):
+        raise HTTPException(status_code=400, detail="Path is not within allowed browse roots")
+    return real_path
 
 router = APIRouter(prefix="/folders", tags=["folders"])
 
@@ -69,3 +81,28 @@ def delete_folder(folder_id: int, request: Request, db: Session = Depends(get_db
     db.delete(folder)
     db.commit()
     return {"deleted": True}
+
+
+@router.get("/browse", response_model=list[DirectoryEntry])
+def browse_folders(path: str | None = Query(default=None, description="Path to browse")):
+    if path is None:
+        entries = []
+        for root in ALLOWED_ROOTS:
+            if os.path.exists(root):
+                entries.append(DirectoryEntry(name=os.path.basename(root) or root, path=root, is_dir=True, parent=None))
+        return sorted(entries, key=lambda e: e.name.lower())
+
+    real_path = resolve_and_validate_path(path)
+    if not os.path.isdir(real_path):
+        raise HTTPException(status_code=404, detail="Directory not found")
+
+    entries = []
+    if os.path.dirname(real_path) and os.path.realpath(real_path) not in ALLOWED_ROOTS:
+        parent_dir = os.path.dirname(real_path)
+        if any(os.path.commonpath([parent_dir, root]) == root for root in ALLOWED_ROOTS):
+            entries.append(DirectoryEntry(name="..", path=parent_dir, is_dir=True, parent=os.path.dirname(parent_dir)))
+    for item in sorted(os.listdir(real_path)):
+        item_path = os.path.join(real_path, item)
+        if os.path.isdir(item_path):
+            entries.append(DirectoryEntry(name=item, path=item_path, is_dir=True, parent=os.path.dirname(real_path)))
+    return entries

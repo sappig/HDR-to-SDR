@@ -52,11 +52,24 @@ class TranscoderRunner:
             return None
 
     def detect_qsv(self):
-        try:
-            proc = subprocess.run(["vainfo"], capture_output=True, text=True, timeout=20)
-            return proc.returncode == 0 and "Intel" in (proc.stdout + proc.stderr)
-        except FileNotFoundError:
-            return False
+        # Prefer VA-API detection via vainfo, then fall back to ffmpeg hwaccels
+        if shutil.which("vainfo"):
+            try:
+                proc = subprocess.run(["vainfo"], capture_output=True, text=True, timeout=20)
+                if proc.returncode == 0 and "Intel" in (proc.stdout + proc.stderr):
+                    return True
+            except Exception:
+                pass
+
+        if shutil.which("ffmpeg"):
+            try:
+                proc = subprocess.run(["ffmpeg", "-hide_banner", "-hwaccels"], capture_output=True, text=True, timeout=20)
+                if proc.returncode == 0 and "qsv" in (proc.stdout + proc.stderr).lower():
+                    return True
+            except Exception:
+                pass
+
+        return os.path.exists("/dev/dri")
 
     def build_command(self, input_path, output_path, width=1920, height=1080, bitrate=4500, software_fallback=False):
         binary = self.discover_plex_transcoder()
