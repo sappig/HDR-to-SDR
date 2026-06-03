@@ -2,8 +2,9 @@ version: '3.8'
 
 services:
   hdr-transcode-manager:
-    # Hardware-enabled image from GHCR. Build locally with USE_HW=true if needed.
-    image: ghcr.io/sappig/HDR-to-SDR:hw
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: hdr-transcode-manager
     restart: unless-stopped
     
@@ -48,3 +49,14 @@ services:
       
       # Timezone
       - TZ=UTC
+
+  hdr-transcode-ui:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    container_name: hdr-transcode-ui
+    restart: unless-stopped
+    depends_on:
+      - hdr-transcode-manager
+    ports:
+      - "8055:80"
