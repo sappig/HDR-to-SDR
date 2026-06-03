@@ -10,21 +10,20 @@ services:
     
     # Port mapping
     ports:
-      - "8080:8080"
+      - "8056:8080"
     
     # OMV-specific paths: adjust to match your media and data locations
     volumes:
       # Data directory for SQLite database and logs
-      - /srv/transcode/data:/data
-      
+      - /srv/dev-disk-by-uuid-3d2a95e2-00dc-457b-956f-a6914dc44a9e/SSD/HDRTOSDR/plex-ffmpeg:/opt/plex-transcoder:ro
+      - /srv/dev-disk-by-uuid-3d2a95e2-00dc-457b-956f-a6914dc44a9e/SSD/HDRTOSDR/data:/data
+      - /srv/mergerfs/36TB/36TB/Series:/Series
+      - /srv/mergerfs/36TB/36TB/Movies:/Movies
+      - /srv/mergerfs/36TB/36TB:/36TB
       # Media input directories (add more as needed)
-      - /mnt/movies:/media/movies
-      - /mnt/tv:/media/tv
-      
       # Optional: Plex transcoder binaries
       # Download and extract these on the host, then mount here.
       # See DEPLOY.md for setup instructions.
-      - /srv/plex-transcoder:/opt/plex-transcoder:ro
     
     # Intel QSV hardware acceleration
     devices:
@@ -34,7 +33,7 @@ services:
     environment:
       # Application settings
       - DATABASE_URL=sqlite:////data/transcode.db
-      - SCAN_INTERVAL=60                    # Folder scan interval in seconds
+      - SCAN_INTERVAL=60000                    # Folder scan interval in seconds
       - LOG_RETENTION_DAYS=30               # Keep logs for 30 days
       
       # Transcoding quality settings
