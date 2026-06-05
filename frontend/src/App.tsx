@@ -22,7 +22,7 @@ import {
 
 interface Folder { id: number; path: string; enabled: boolean; created_at: string }
 interface FileRecord { id: number; path: string; hdr_detected: boolean; hdr_type: string | null; status: string; resolution: string | null; codec: string | null; bitrate: number | null; audio_tracks: number | null; subtitle_tracks: number | null; file_size: number; scanned_at: string }
-interface QueueItem { id: number; media_file_id: number; state: string; progress: number; paused: boolean; sort_order: number; started_at?: string | null; completed_at?: string | null }
+interface QueueItem { id: number; media_file_id: number; filename?: string | null; file_path?: string | null; output_path?: string | null; state: string; progress: number; paused: boolean; sort_order: number; eta_seconds?: number | null; started_at?: string | null; completed_at?: string | null; transcode_command?: string | null; last_error?: string | null }
 interface Settings { max_concurrent_transcodes: number; software_fallback: boolean; output_bitrate: number; output_resolution: string; plex_transcoder_path: string | null; scan_interval: number; log_retention_days: number; qsv_available: boolean; qsv_device: string | null; detected_plex_version: string | null }
 interface DirectoryEntry { name: string; path: string; is_dir: boolean; parent?: string | null }
 
@@ -141,6 +141,38 @@ function App() {
       body: JSON.stringify({ ids }),
     })
     await loadAll()
+  }
+
+  const pauseQueueItem = async (itemId: number) => {
+    await fetch(`${baseUrl}/queue/${itemId}/pause`, { method: 'POST' })
+    await loadAll()
+  }
+
+  const resumeQueueItem = async (itemId: number) => {
+    await fetch(`${baseUrl}/queue/${itemId}/resume`, { method: 'POST' })
+    await loadAll()
+  }
+
+  const formatDuration = (seconds?: number | null) => {
+    if (!seconds || seconds <= 0) {
+      return 'Unknown'
+    }
+    const hrs = Math.floor(seconds / 3600)
+    const mins = Math.floor((seconds % 3600) / 60)
+    const secs = Math.floor(seconds % 60)
+    return `${hrs > 0 ? `${hrs}h ` : ''}${mins}m ${secs}s`
+  }
+
+  const getQueueTimeLeft = (item: QueueItem) => {
+    if (!item.eta_seconds) {
+      return 'Estimating...'
+    }
+    if (!item.started_at) {
+      return formatDuration(item.eta_seconds)
+    }
+    const startedAt = new Date(item.started_at).getTime()
+    const elapsed = Math.max(0, Math.floor((Date.now() - startedAt) / 1000))
+    return formatDuration(Math.max(0, item.eta_seconds - elapsed))
   }
 
   const reorderQueue = async (ids: number[]) => {
@@ -307,15 +339,29 @@ ${volumeSnippet || '  # Add folders to generate mappings'}`}
               <CardContent>
                 <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={2}>
                   <Box>
-                    <Typography variant="h6">Queue #{item.id}</Typography>
+                    <Typography variant="h6">{item.filename || `Queue #${item.id}`}</Typography>
+                    {item.file_path && <Typography variant="body2">Source: {item.file_path}</Typography>}
+                    {item.output_path && <Typography variant="body2">Output: {item.output_path}</Typography>}
                     <Typography>State: {item.state}</Typography>
                     <Typography>Progress: {item.progress.toFixed(0)}%</Typography>
+                    <Typography>Time left: {getQueueTimeLeft(item)}</Typography>
                     <Typography>Paused: {item.paused ? 'Yes' : 'No'}</Typography>
+                    {item.last_error && <Typography color="error">Error: {item.last_error}</Typography>}
+                    {item.transcode_command && (
+                      <Typography variant="body2" sx={{ pt: 1, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                        Command: {item.transcode_command}
+                      </Typography>
+                    )}
                   </Box>
                   <Stack direction="row" spacing={1}>
-                    <Button variant="outlined" size="small" onClick={() => moveQueueItem(item.id, 'top')}>Top</Button>
+                    <Button variant="outlined" size="small" onClick={() => moveQueueItem(item.id, 'top')} disabled={index === 0}>Top</Button>
                     <Button variant="outlined" size="small" onClick={() => moveQueueItem(item.id, 'up')} disabled={index === 0}>Up</Button>
                     <Button variant="outlined" size="small" onClick={() => moveQueueItem(item.id, 'down')} disabled={index === queue.length - 1}>Down</Button>
+                    {item.paused ? (
+                      <Button variant="contained" color="success" size="small" onClick={() => resumeQueueItem(item.id)}>Resume</Button>
+                    ) : (
+                      <Button variant="contained" color="warning" size="small" onClick={() => pauseQueueItem(item.id)}>Pause</Button>
+                    )}
                     <Button variant="contained" color="error" size="small" onClick={() => removeQueueItem(item.id)}>Remove</Button>
                   </Stack>
                 </Stack>
@@ -330,7 +376,9 @@ ${volumeSnippet || '  # Add folders to generate mappings'}`}
           {files.map((file) => (
             <Card key={file.id} sx={{ mb: 1 }}>
               <CardContent>
-                <Typography variant="h6">{file.path}</Typography>
+                <Typography variant="h6">{file.filename || file.path}</Typography>
+                <Typography variant="body2">Source: {file.path}</Typography>
+                {file.output_path && <Typography variant="body2">Output: {file.output_path}</Typography>}
                 <Typography>HDR: {file.hdr_detected ? 'Yes' : 'No'} ({file.hdr_type || 'Unknown'})</Typography>
                 <Typography>Resolution: {file.resolution || 'N/A'}</Typography>
                 <Typography>Codec: {file.codec || 'N/A'}</Typography>

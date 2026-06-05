@@ -38,12 +38,15 @@ class MediaFileRead(BaseModel):
     status: str
     scan_error: Optional[str]
     output_path: Optional[str]
-    metadata: Optional[str]
+    extra_metadata: Optional[str]
 
 
 class QueueItemRead(BaseModel):
     id: int
     media_file_id: int
+    filename: Optional[str]
+    file_path: Optional[str]
+    output_path: Optional[str]
     priority: int
     sort_order: int
     state: str
@@ -53,6 +56,7 @@ class QueueItemRead(BaseModel):
     started_at: Optional[datetime]
     completed_at: Optional[datetime]
     log_path: Optional[str]
+    transcode_command: Optional[str]
     last_error: Optional[str]
 
 

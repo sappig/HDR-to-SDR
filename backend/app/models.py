@@ -56,6 +56,8 @@ class QueueItem(Base):
     completed_at = Column(DateTime, nullable=True)
     log_path = Column(String, nullable=True)
     last_error = Column(Text, nullable=True)
+    transcode_command = Column(Text, nullable=True)
+    media_file = relationship("MediaFile")
 
 
 class TranscodeHistory(Base):

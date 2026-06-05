@@ -31,6 +31,25 @@ class QueueManager:
             data[row.key] = row.value
         return data
 
+    def build_temp_output_path(self, output_path: str) -> str:
+        return f"{output_path}.part"
+
+    def cleanup_incomplete_output(self, output_path: str):
+        temp_output = self.build_temp_output_path(output_path)
+        if os.path.exists(temp_output):
+            try:
+                os.remove(temp_output)
+            except OSError:
+                pass
+
+    def estimate_eta(self, media_file_size: int, bitrate: int) -> int:
+        if not media_file_size or not bitrate:
+            return 0
+        # Roughly estimate based on target bitrate and file size.
+        # This is only a heuristic; actual time depends on hardware and source complexity.
+        seconds = int(media_file_size / (bitrate * 125) * 1.5)
+        return max(30, seconds)
+
     async def run(self):
         while True:
             session = self.session_factory()
@@ -41,6 +60,10 @@ class QueueManager:
                     item.progress = 0
                     item.started_at = None
                     item.completed_at = None
+                    item.eta_seconds = None
+                    media_file = session.query(MediaFile).filter(MediaFile.id == item.media_file_id).first()
+                    if media_file and media_file.output_path:
+                        self.cleanup_incomplete_output(media_file.output_path)
                 session.commit()
                 self.process_queue(session)
             finally:
@@ -68,11 +91,19 @@ class QueueManager:
             session.commit()
 
             output_path = media_file.output_path or self.build_output_path(media_file.path)
+            temp_output_path = self.build_temp_output_path(output_path)
+            if os.path.exists(temp_output_path):
+                try:
+                    os.remove(temp_output_path)
+                except OSError:
+                    pass
+
             if os.path.exists(output_path):
                 media_file.status = "Skipped"
                 item.state = "Completed"
                 item.progress = 100
                 item.completed_at = datetime.utcnow()
+                item.eta_seconds = 0
                 session.commit()
                 continue
 
@@ -88,15 +119,19 @@ class QueueManager:
             if not qsv_available and not software_fallback:
                 item.state = "Failed"
                 item.progress = 100
+                item.eta_seconds = 0
                 item.last_error = "QSV not available and software fallback disabled"
                 item.completed_at = datetime.utcnow()
                 media_file.status = "Failed"
                 session.commit()
                 continue
 
+            item.eta_seconds = self.estimate_eta(media_file.file_size, int(settings.get("output_bitrate", 4500)))
+            session.commit()
+
             result = runner.transcode(
                 media_file.path,
-                output_path,
+                temp_output_path,
                 bitrate=int(settings.get("output_bitrate", 4500)),
                 width=int(settings.get("output_resolution", "1920x1080").split("x")[0]),
                 height=int(settings.get("output_resolution", "1920x1080").split("x")[1]),
@@ -111,18 +146,27 @@ class QueueManager:
                 log=(result.stdout or "") + (result.stderr or ""),
             )
             session.add(history)
+            item.transcode_command = result.command
 
             if result.success:
+                if temp_output_path != output_path and os.path.exists(temp_output_path):
+                    os.replace(temp_output_path, output_path)
                 item.state = "Completed"
                 item.progress = 100
                 item.completed_at = datetime.utcnow()
+                item.eta_seconds = 0
                 media_file.status = "Completed"
                 media_file.output_path = output_path
                 session.commit()
             else:
+                if os.path.exists(temp_output_path):
+                    try:
+                        os.remove(temp_output_path)
+                    except OSError:
+                        pass
                 item.state = "Failed"
                 item.progress = 100
-                item.completed_at = datetime.utcnow()
+                item.eta_seconds = 0
                 item.last_error = (result.stderr or result.stdout or "Transcoding failed")[:1000]
                 media_file.status = "Failed"
                 session.commit()
