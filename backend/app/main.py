@@ -31,30 +31,41 @@ async def lifespan(app: FastAPI):
     app.state.engine = engine
     app.state.session_factory = SessionLocal
 
-    init_database(engine)
-
-    app.state.queue_manager = QueueManager(SessionLocal)
-    app.state.queue_task = asyncio.create_task(app.state.queue_manager.run())
-
-    app.state.monitor = FolderMonitor(SessionLocal, app.state.queue_manager)
-    app.state.monitor.start()
-
-    logger.info("Application startup complete and queue manager running")
-    session = SessionLocal()
     try:
-        log_event(session, None, "system", "Application startup complete")
+        init_database(engine)
+
+        app.state.queue_manager = QueueManager(SessionLocal)
+        app.state.queue_task = asyncio.create_task(app.state.queue_manager.run())
+
+        app.state.monitor = FolderMonitor(SessionLocal, app.state.queue_manager)
+        try:
+            app.state.monitor.start()
+        except Exception:
+            logger.exception("Folder monitor failed to start; continuing without folder watch")
+            app.state.monitor = None
+
+        logger.info("Application startup complete and queue manager running")
+        session = SessionLocal()
+        try:
+            log_event(session, None, "system", "Application startup complete")
+        finally:
+            session.close()
+
+        yield
+    except Exception:
+        logger.exception("Application startup failed")
+        raise
     finally:
-        session.close()
-
-    yield
-
-    app.state.monitor.stop()
-    app.state.queue_manager.stop()
-    app.state.queue_task.cancel()
-    try:
-        await app.state.queue_task
-    except asyncio.CancelledError:
-        pass
+        if app.state.get("monitor"):
+            app.state.monitor.stop()
+        if app.state.get("queue_manager"):
+            app.state.queue_manager.stop()
+        if app.state.get("queue_task"):
+            app.state.queue_task.cancel()
+            try:
+                await app.state.queue_task
+            except asyncio.CancelledError:
+                pass
 
 
 app = FastAPI(title="HDR to FHD Transcoding Manager", lifespan=lifespan)

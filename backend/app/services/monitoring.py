@@ -1,3 +1,4 @@
+import logging
 import os
 
 from watchdog.events import FileSystemEventHandler
@@ -25,6 +26,9 @@ class MediaFileHandler(FileSystemEventHandler):
             self.scan_service.process_path(event.dest_path, self.folder_id)
 
 
+logger = logging.getLogger(__name__)
+
+
 class FolderMonitor:
     def __init__(self, session_factory, queue_manager):
         self.session_factory = session_factory
@@ -37,6 +41,9 @@ class FolderMonitor:
         try:
             folders = session.query(Folder).filter(Folder.enabled.is_(True)).all()
             for folder in folders:
+                if not os.path.exists(folder.path):
+                    logger.warning("Skipping folder because path does not exist: %s", folder.path)
+                    continue
                 self.watch_folder(folder)
                 self.scan_folder(folder)
         finally:
@@ -50,12 +57,18 @@ class FolderMonitor:
     def watch_folder(self, folder):
         if folder.id in self.watchers:
             return
+        if not os.path.exists(folder.path):
+            logger.warning("Cannot watch missing folder path: %s", folder.path)
+            return
         scan_service = CoreScanService(self.session_factory(), self.queue_manager)
         handler = MediaFileHandler(folder.id, scan_service)
         self.observer.schedule(handler, folder.path, recursive=True)
         self.watchers[folder.id] = handler
 
     def scan_folder(self, folder):
+        if not os.path.exists(folder.path):
+            logger.warning("Skipping scan for missing folder path: %s", folder.path)
+            return
         scan_service = CoreScanService(self.session_factory(), self.queue_manager)
         for root, dirs, files in os.walk(folder.path):
             dirs[:] = [d for d in dirs if d.lower() not in {"extras", "bonus"}]

@@ -13,7 +13,7 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 def init_database(engine):
     repo_root = Path(__file__).resolve().parents[1]
     alembic_ini = repo_root / "alembic.ini"
-    alembic_env = repo_root / "alembic" / "env.py"
+    alembic_env = repo_root / "app" / "migrations" / "env.py"
 
     if alembic_ini.exists() and alembic_env.exists():
         from alembic.config import Config
