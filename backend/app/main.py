@@ -2,9 +2,11 @@ import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -70,6 +72,10 @@ app.include_router(queue_router)
 app.include_router(settings_router)
 app.include_router(system_router)
 app.include_router(events_router)
+
+static_dir = Path(__file__).resolve().parents[2] / "frontend_dist"
+if static_dir.exists():
+    app.mount("/", StaticFiles(directory=str(static_dir), html=True), name="frontend")
 
 
 @app.get("/health")

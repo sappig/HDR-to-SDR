@@ -5,57 +5,31 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        USE_HW: "true"
     container_name: hdr-transcode-manager
     restart: unless-stopped
-    
-    # Port mapping
+
     ports:
       - "8056:8080"
-    
-    # OMV-specific paths: adjust to match your media and data locations
+
     volumes:
-      # Data directory for SQLite database and logs
       - /srv/dev-disk-by-uuid-3d2a95e2-00dc-457b-956f-a6914dc44a9e/SSD/HDRTOSDR/plex-ffmpeg:/opt/plex-transcoder:ro
       - /srv/dev-disk-by-uuid-3d2a95e2-00dc-457b-956f-a6914dc44a9e/SSD/HDRTOSDR/data:/data
       - /srv/mergerfs/36TB/36TB/Series:/Series
       - /srv/mergerfs/36TB/36TB/Movies:/Movies
       - /srv/mergerfs/36TB/36TB:/36TB
-      # Media input directories (add more as needed)
-      # Optional: Plex transcoder binaries
-      # Download and extract these on the host, then mount here.
-      # See DEPLOY.md for setup instructions.
-    
-    # Intel QSV hardware acceleration
+
     devices:
       - /dev/dri:/dev/dri
-    
-    # Environment variables with example values
-    environment:
-      # Application settings
-      - DATABASE_URL=sqlite:////data/transcode.db
-      - SCAN_INTERVAL=60000                    # Folder scan interval in seconds
-      - LOG_RETENTION_DAYS=30               # Keep logs for 30 days
-      
-      # Transcoding quality settings
-      - OUTPUT_BITRATE=4500                 # Output bitrate in kbps (4500 for good quality)
-      - OUTPUT_RESOLUTION=1920x1080         # FHD resolution
-      - MAX_CONCURRENT_TRANSCODES=2         # Number of concurrent transcode jobs
-      - SOFTWARE_FALLBACK=false             # Allow software fallback if QSV unavailable
-      
-      # Plex transcoder path (if using Plex binary)
-      # Leave empty to use system ffmpeg, or set to Plex transcoder path
-      - PLEX_TRANSCODER_PATH=/opt/plex-transcoder/PlexTranscoder
-      
-      # Timezone
-      - TZ=UTC
 
-  hdr-transcode-ui:
-    build:
-      context: .
-      dockerfile: frontend/Dockerfile
-    container_name: hdr-transcode-ui
-    restart: unless-stopped
-    depends_on:
-      - hdr-transcode-manager
-    ports:
-      - "8055:80"
+    environment:
+      - DATABASE_URL=sqlite:////data/transcode.db
+      - SCAN_INTERVAL=60000
+      - LOG_RETENTION_DAYS=30
+      - OUTPUT_BITRATE=4500
+      - OUTPUT_RESOLUTION=1920x1080
+      - MAX_CONCURRENT_TRANSCODES=2
+      - SOFTWARE_FALLBACK=false
+      - PLEX_TRANSCODER_PATH=/opt/plex-transcoder/PlexTranscoder
+      - TZ=UTC
