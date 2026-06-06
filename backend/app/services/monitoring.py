@@ -1,5 +1,6 @@
 import logging
 import os
+from threading import Thread
 
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
@@ -35,6 +36,7 @@ class FolderMonitor:
         self.queue_manager = queue_manager
         self.observer = Observer()
         self.watchers = {}
+        self.scan_thread = None
 
     def start(self):
         session = self.session_factory()
@@ -45,14 +47,18 @@ class FolderMonitor:
                     logger.warning("Skipping folder because path does not exist: %s", folder.path)
                     continue
                 self.watch_folder(folder)
-                self.scan_folder(folder)
         finally:
             session.close()
+
         self.observer.start()
+        self.scan_thread = Thread(target=self.scan_all_folders, daemon=True)
+        self.scan_thread.start()
 
     def stop(self):
         self.observer.stop()
         self.observer.join()
+        if self.scan_thread and self.scan_thread.is_alive():
+            self.scan_thread.join(timeout=1)
 
     def watch_folder(self, folder):
         if folder.id in self.watchers:
@@ -65,11 +71,20 @@ class FolderMonitor:
         self.observer.schedule(handler, folder.path, recursive=True)
         self.watchers[folder.id] = handler
 
-    def scan_folder(self, folder):
-        if not os.path.exists(folder.path):
-            logger.warning("Skipping scan for missing folder path: %s", folder.path)
-            return
-        scan_service = CoreScanService(self.session_factory(), self.queue_manager)
+    def scan_all_folders(self):
+        session = self.session_factory()
+        try:
+            folders = session.query(Folder).filter(Folder.enabled.is_(True)).all()
+            for folder in folders:
+                if not os.path.exists(folder.path):
+                    logger.warning("Skipping scan for missing folder path: %s", folder.path)
+                    continue
+                self.scan_folder(session, folder)
+        finally:
+            session.close()
+
+    def scan_folder(self, session, folder):
+        scan_service = CoreScanService(session, self.queue_manager)
         for root, dirs, files in os.walk(folder.path):
             dirs[:] = [d for d in dirs if d.lower() not in {"extras", "bonus"}]
             for file in files:

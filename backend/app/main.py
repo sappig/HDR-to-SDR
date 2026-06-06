@@ -56,11 +56,11 @@ async def lifespan(app: FastAPI):
         logger.exception("Application startup failed")
         raise
     finally:
-        if app.state.get("monitor"):
+        if hasattr(app.state, "monitor") and app.state.monitor:
             app.state.monitor.stop()
-        if app.state.get("queue_manager"):
+        if hasattr(app.state, "queue_manager") and app.state.queue_manager:
             app.state.queue_manager.stop()
-        if app.state.get("queue_task"):
+        if hasattr(app.state, "queue_task") and app.state.queue_task:
             app.state.queue_task.cancel()
             try:
                 await app.state.queue_task
