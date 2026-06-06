@@ -14,6 +14,8 @@ from .routers.folders import router as folders_router
 from .routers.queue import router as queue_router
 from .routers.settings import router as settings_router
 from .routers.system import router as system_router
+from .routers.events import router as events_router
+from .services.activity_logger import log_event
 from .services.queue_manager import QueueManager
 from .services.monitoring import FolderMonitor
 
@@ -34,6 +36,13 @@ async def lifespan(app: FastAPI):
 
     app.state.monitor = FolderMonitor(SessionLocal, app.state.queue_manager)
     app.state.monitor.start()
+
+    logger.info("Application startup complete and queue manager running")
+    session = SessionLocal()
+    try:
+        log_event(session, None, "system", "Application startup complete")
+    finally:
+        session.close()
 
     yield
 
@@ -60,6 +69,7 @@ app.include_router(files_router)
 app.include_router(queue_router)
 app.include_router(settings_router)
 app.include_router(system_router)
+app.include_router(events_router)
 
 
 @app.get("/health")

@@ -7,7 +7,8 @@ from pathlib import Path
 
 from sqlalchemy.orm import Session
 
-from ..models import Folder, MediaFile, QueueItem
+from ..models import Activity, Folder, MediaFile, QueueItem
+from .activity_logger import log_event
 
 
 HDR_MARKERS = [
@@ -235,6 +236,7 @@ class ScanService:
             return None
         media_file = self.upsert_media_file(folder_id, media_data)
         self.queue_if_needed(media_file)
+        log_event(self.session, media_file.id, "scan", f"Discovered file {media_file.filename}, HDR={media_file.hdr_detected}, type={media_file.hdr_type or 'unknown'}")
         return media_file
 
     def upsert_media_file(self, folder_id, media_data):
@@ -284,6 +286,7 @@ class ScanService:
         if not media_file.hdr_detected:
             media_file.status = "Skipped"
             self.session.commit()
+            log_event(self.session, media_file.id, "scan", f"Skipped {media_file.filename}: HDR not detected")
             return
 
         counterpart = self.match_existing_sdr({
@@ -302,6 +305,7 @@ class ScanService:
         if counterpart:
             media_file.status = "Skipped"
             self.session.commit()
+            log_event(self.session, media_file.id, "scan", f"Skipped {media_file.filename}: existing SDR file found")
             return
 
         existing_queue = self.session.query(QueueItem).filter_by(media_file_id=media_file.id).first()
@@ -321,3 +325,4 @@ class ScanService:
         self.session.add(queue_item)
         media_file.status = "Queued"
         self.session.commit()
+        log_event(self.session, media_file.id, "queue", f"Queued {media_file.filename} for transcoding")

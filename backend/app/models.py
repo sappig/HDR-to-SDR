@@ -68,7 +68,16 @@ class TranscodeHistory(Base):
     started_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     completed_at = Column(DateTime, nullable=True)
     result = Column(String, nullable=True)
-    log = Column(Text, nullable=True)
+    log = Column(Text, nullable=True)\n
+
+class Activity(Base):
+    __tablename__ = "activity"
+
+    id = Column(Integer, primary_key=True, index=True)
+    media_file_id = Column(Integer, ForeignKey("media_files.id"), nullable=True)
+    category = Column(String, nullable=False)
+    message = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 
 class AppSetting(Base):

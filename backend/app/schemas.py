@@ -64,6 +64,14 @@ class QueueReorderRequest(BaseModel):
     order: List[int]
 
 
+class ActivityRead(BaseModel):
+    id: int
+    media_file_id: Optional[int]
+    category: str
+    message: str
+    created_at: datetime
+
+
 class SettingsRead(BaseModel):
     max_concurrent_transcodes: int
     software_fallback: bool

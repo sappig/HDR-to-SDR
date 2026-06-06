@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import re
 import shutil
@@ -6,6 +7,8 @@ import subprocess
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -21,13 +24,22 @@ class TranscodeResult:
 class TranscoderRunner:
     def __init__(self, settings_provider):
         self.settings_provider = settings_provider
+        self.binary = self.discover_plex_transcoder()
+        logger.info("Using transcoder binary: %s", self.binary)
 
     def get_setting(self, key, default=None):
         if callable(self.settings_provider):
-            return self.settings_provider(key, default)
-        if hasattr(self.settings_provider, "get"):
-            return self.settings_provider.get(key, default)
-        return default
+            value = self.settings_provider(key, default)
+        elif hasattr(self.settings_provider, "get"):
+            value = self.settings_provider.get(key, default)
+        else:
+            value = default
+
+        if value is None:
+            env_key = key.upper()
+            value = os.getenv(env_key, default)
+
+        return value
 
     def discover_plex_transcoder(self):
         override = self.get_setting("plex_transcoder_path")
@@ -78,7 +90,7 @@ class TranscoderRunner:
         return os.path.exists("/dev/dri")
 
     def build_command(self, input_path, output_path, width=1920, height=1080, bitrate=4500, software_fallback=False):
-        binary = self.discover_plex_transcoder()
+        binary = self.binary
         if not binary:
             raise RuntimeError("No transcoder binary found")
 

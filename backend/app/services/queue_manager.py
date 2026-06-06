@@ -6,6 +6,7 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 
 from ..models import MediaFile, QueueItem, TranscodeHistory
+from .activity_logger import log_event
 from .transcoder import TranscoderRunner
 
 
@@ -51,24 +52,27 @@ class QueueManager:
         return max(30, seconds)
 
     async def run(self):
-        while True:
-            session = self.session_factory()
-            try:
-                recovering = session.query(QueueItem).filter(QueueItem.state.in_(["Scanning", "Transcoding"])).all()
-                for item in recovering:
-                    item.state = "Pending"
-                    item.progress = 0
-                    item.started_at = None
-                    item.completed_at = None
-                    item.eta_seconds = None
-                    media_file = session.query(MediaFile).filter(MediaFile.id == item.media_file_id).first()
-                    if media_file and media_file.output_path:
-                        self.cleanup_incomplete_output(media_file.output_path)
-                session.commit()
-                self.process_queue(session)
-            finally:
-                session.close()
+        while self._running:
+            await asyncio.to_thread(self.process_cycle)
             await asyncio.sleep(2)
+
+    def process_cycle(self):
+        session = self.session_factory()
+        try:
+            recovering = session.query(QueueItem).filter(QueueItem.state.in_(["Scanning", "Transcoding"])).all()
+            for item in recovering:
+                item.state = "Pending"
+                item.progress = 0
+                item.started_at = None
+                item.completed_at = None
+                item.eta_seconds = None
+                media_file = session.query(MediaFile).filter(MediaFile.id == item.media_file_id).first()
+                if media_file and media_file.output_path:
+                    self.cleanup_incomplete_output(media_file.output_path)
+            session.commit()
+            self.process_queue(session)
+        finally:
+            session.close()
 
     def process_queue(self, session: Session):
         active = session.query(QueueItem).filter(QueueItem.state.in_(["Pending", "Waiting"])).order_by(QueueItem.sort_order.asc()).all()
@@ -84,6 +88,7 @@ class QueueManager:
                 item.state = "Failed"
                 item.last_error = "Source file missing"
                 session.commit()
+                log_event(session, media_file.id, "transcode", f"Transcode failed: source missing for {media_file.filename}")
                 continue
 
             item.state = "Scanning"
@@ -124,11 +129,13 @@ class QueueManager:
                 item.completed_at = datetime.utcnow()
                 media_file.status = "Failed"
                 session.commit()
+                log_event(session, media_file.id, "transcode", f"Transcode failed: QSV unavailable for {media_file.filename}")
                 continue
 
             item.eta_seconds = self.estimate_eta(media_file.file_size, int(settings.get("output_bitrate", 4500)))
             session.commit()
 
+            log_event(session, media_file.id, "transcode", f"Starting transcoding {media_file.filename}")
             result = runner.transcode(
                 media_file.path,
                 temp_output_path,
@@ -158,6 +165,7 @@ class QueueManager:
                 media_file.status = "Completed"
                 media_file.output_path = output_path
                 session.commit()
+                log_event(session, media_file.id, "transcode", f"Transcoding successful for {media_file.filename}")
             else:
                 if os.path.exists(temp_output_path):
                     try:
@@ -170,6 +178,7 @@ class QueueManager:
                 item.last_error = (result.stderr or result.stdout or "Transcoding failed")[:1000]
                 media_file.status = "Failed"
                 session.commit()
+                log_event(session, media_file.id, "transcode", f"Transcoding failed for {media_file.filename}: {item.last_error}")
 
     def build_output_path(self, path):
         from pathlib import Path

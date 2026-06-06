@@ -21,8 +21,9 @@ import {
 } from '@mui/material'
 
 interface Folder { id: number; path: string; enabled: boolean; created_at: string }
-interface FileRecord { id: number; path: string; hdr_detected: boolean; hdr_type: string | null; status: string; resolution: string | null; codec: string | null; bitrate: number | null; audio_tracks: number | null; subtitle_tracks: number | null; file_size: number; scanned_at: string }
+interface FileRecord { id: number; path: string; filename?: string | null; hdr_detected: boolean; hdr_type: string | null; status: string; resolution: string | null; codec: string | null; bitrate: number | null; audio_tracks: number | null; subtitle_tracks: number | null; file_size: number; scanned_at: string; output_path?: string | null }
 interface QueueItem { id: number; media_file_id: number; filename?: string | null; file_path?: string | null; output_path?: string | null; state: string; progress: number; paused: boolean; sort_order: number; eta_seconds?: number | null; started_at?: string | null; completed_at?: string | null; transcode_command?: string | null; last_error?: string | null }
+interface ActivityEntry { id: number; media_file_id?: number | null; category: string; message: string; created_at: string }
 interface Settings { max_concurrent_transcodes: number; software_fallback: boolean; output_bitrate: number; output_resolution: string; plex_transcoder_path: string | null; scan_interval: number; log_retention_days: number; qsv_available: boolean; qsv_device: string | null; detected_plex_version: string | null }
 interface DirectoryEntry { name: string; path: string; is_dir: boolean; parent?: string | null }
 
@@ -41,6 +42,14 @@ function App() {
   const [tab, setTab] = useState(0)
   const [message, setMessage] = useState('')
   const [settingsForm, setSettingsForm] = useState<Settings | null>(null)
+  const [events, setEvents] = useState<ActivityEntry[]>([])
+
+  const loadEvents = async () => {
+    const eventsRes = await fetch(`${baseUrl}/events`)
+    if (eventsRes.ok) {
+      setEvents(await eventsRes.json())
+    }
+  }
 
   const loadAll = async () => {
     const [folderRes, fileRes, queueRes, settingsRes] = await Promise.all([
@@ -55,6 +64,7 @@ function App() {
     setQueue(await queueRes.json())
     setSettings(settingsData)
     setSettingsForm(settingsData)
+    await loadEvents()
   }
 
   const loadBrowse = async (path?: string) => {
@@ -234,6 +244,11 @@ function App() {
   const volumeSnippet = useMemo(() => {
     return folders.map((folder) => `  - ${folder.path}:${folder.path}`).join('\n')
   }, [folders])
+
+  const formatEventTime = (timestamp: string) => {
+    const date = new Date(timestamp)
+    return date.toLocaleString()
+  }
 
   return (
     <Container maxWidth="xl" sx={{ py: 3 }}>
@@ -441,6 +456,22 @@ ${volumeSnippet || '  # Add folders to generate mappings'}`}
           </Stack>
         </Paper>
       )}
+
+      <Paper sx={{ p: 2, mt: 2, backgroundColor: '#111', color: '#fff' }}>
+        <Typography variant="h6" gutterBottom>Activity Log</Typography>
+        <List dense>
+          {events.length === 0 ? (
+            <ListItem><ListItemText primary="No recent events yet." /></ListItem>
+          ) : events.map((event) => (
+            <ListItem key={event.id}>
+              <ListItemText
+                primary={event.message}
+                secondary={`${event.category} · ${formatEventTime(event.created_at)}`}
+              />
+            </ListItem>
+          ))}
+        </List>
+      </Paper>
     </Container>
   )
 }
