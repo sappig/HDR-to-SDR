@@ -68,7 +68,7 @@ class TranscodeHistory(Base):
     started_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     completed_at = Column(DateTime, nullable=True)
     result = Column(String, nullable=True)
-    log = Column(Text, nullable=True)\n
+    log = Column(Text, nullable=True)
 
 class Activity(Base):
     __tablename__ = "activity"
