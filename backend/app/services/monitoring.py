@@ -80,6 +80,8 @@ class FolderMonitor:
                     logger.warning("Skipping scan for missing folder path: %s", folder.path)
                     continue
                 self.scan_folder(session, folder)
+        except Exception:
+            logger.exception("Folder scan thread failed")
         finally:
             session.close()
 

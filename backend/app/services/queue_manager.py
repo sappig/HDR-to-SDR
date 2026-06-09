@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import os
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -8,6 +9,8 @@ from sqlalchemy.orm import Session
 from ..models import MediaFile, QueueItem, TranscodeHistory
 from .activity_logger import log_event
 from .transcoder import TranscoderRunner
+
+logger = logging.getLogger(__name__)
 
 
 class QueueManager:
@@ -53,7 +56,10 @@ class QueueManager:
 
     async def run(self):
         while self._running:
-            await asyncio.to_thread(self.process_cycle)
+            try:
+                await asyncio.to_thread(self.process_cycle)
+            except Exception:
+                logger.exception("Queue manager cycle failed")
             await asyncio.sleep(2)
 
     def process_cycle(self):
